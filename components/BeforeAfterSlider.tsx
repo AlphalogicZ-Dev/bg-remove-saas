@@ -5,9 +5,10 @@ import { useRef, useEffect, useState } from 'react'
 interface Props {
   originalUrl: string
   processedUrl: string
+  darkMode?: boolean
 }
 
-export default function BeforeAfterSlider({ originalUrl, processedUrl }: Props) {
+export default function BeforeAfterSlider({ originalUrl, processedUrl, darkMode = false }: Props) {
   const [sliderPos, setSliderPos] = useState(50)
   const containerRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
@@ -19,37 +20,19 @@ export default function BeforeAfterSlider({ originalUrl, processedUrl }: Props) 
     setSliderPos(pct)
   }
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    isDragging.current = true
-    updateSlider(e.clientX)
-  }
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    isDragging.current = true
-    updateSlider(e.touches[0].clientX)
-  }
-
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging.current) updateSlider(e.clientX)
-    }
-    const handleTouchMove = (e: TouchEvent) => {
-      if (isDragging.current) updateSlider(e.touches[0].clientX)
-    }
-    const handleUp = () => {
-      isDragging.current = false
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleUp)
-    window.addEventListener('touchmove', handleTouchMove, { passive: true })
-    window.addEventListener('touchend', handleUp)
-
+    const onMove = (e: MouseEvent) => { if (isDragging.current) updateSlider(e.clientX) }
+    const onTouch = (e: TouchEvent) => { if (isDragging.current) updateSlider(e.touches[0].clientX) }
+    const onUp = () => { isDragging.current = false }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onTouch, { passive: true })
+    window.addEventListener('touchend', onUp)
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleUp)
-      window.removeEventListener('touchmove', handleTouchMove)
-      window.removeEventListener('touchend', handleUp)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onTouch)
+      window.removeEventListener('touchend', onUp)
     }
   }, [])
 
@@ -57,61 +40,44 @@ export default function BeforeAfterSlider({ originalUrl, processedUrl }: Props) 
     <div
       ref={containerRef}
       className="relative w-full h-full select-none overflow-hidden cursor-ew-resize"
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
+      onMouseDown={(e) => { isDragging.current = true; updateSlider(e.clientX) }}
+      onTouchStart={(e) => { isDragging.current = true; updateSlider(e.touches[0].clientX) }}
     >
-      {/* Processed image (left side — transparent background) */}
+      {/* After — processed (left, clipped) */}
       <div
-        className="absolute inset-0 transparent-bg"
+        className={`absolute inset-0 ${darkMode ? 'transparent-bg-dark' : 'transparent-bg'}`}
         style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
       >
-        <img
-          src={processedUrl}
-          alt="Processed"
-          className="w-full h-full object-cover"
-          draggable={false}
-        />
+        <img src={processedUrl} alt="Background removed" className="w-full h-full object-cover" draggable={false} />
       </div>
 
-      {/* Original image (right side) */}
+      {/* Before — original (right, clipped) */}
       <div
         className="absolute inset-0"
         style={{ clipPath: `inset(0 0 0 ${sliderPos}%)` }}
       >
-        <img
-          src={originalUrl}
-          alt="Original"
-          className="w-full h-full object-cover"
-          draggable={false}
-        />
+        <img src={originalUrl} alt="Original" className="w-full h-full object-cover" draggable={false} />
       </div>
 
-      {/* Divider line */}
+      {/* Divider + handle */}
       <div
-        className="absolute top-0 bottom-0 w-0.5 bg-white/90 pointer-events-none"
-        style={{ left: `${sliderPos}%` }}
+        className="absolute top-0 bottom-0 w-0.5 bg-white pointer-events-none"
+        style={{ left: `${sliderPos}%`, transform: 'translateX(-50%)' }}
       >
-        {/* Handle */}
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center">
-          <svg className="w-3.5 h-3.5 text-gray-700" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M4.5 2L1 7l3.5 5M9.5 2L13 7l-3.5 5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white shadow-[0_4px_20px_rgba(0,0,0,0.3)] flex items-center justify-center">
+          <svg className="w-4 h-4 text-gray-600" viewBox="0 0 16 16" fill="none">
+            <path d="M5 3L1 8l4 5M11 3l4 5-4 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
       </div>
 
       {/* Labels */}
-      <div className="absolute top-2 left-2 text-xs bg-black/60 backdrop-blur-sm rounded-md px-2 py-1 text-white/80 pointer-events-none">
-        After
-      </div>
-      <div className="absolute top-2 right-2 text-xs bg-black/60 backdrop-blur-sm rounded-md px-2 py-1 text-white/80 pointer-events-none">
-        Before
-      </div>
+      <span className="absolute top-2.5 left-3 text-[10px] font-bold bg-black/55 text-white backdrop-blur-sm rounded-full px-2.5 py-1 pointer-events-none tracking-wide uppercase">
+        Removed
+      </span>
+      <span className="absolute top-2.5 right-3 text-[10px] font-bold bg-black/55 text-white backdrop-blur-sm rounded-full px-2.5 py-1 pointer-events-none tracking-wide uppercase">
+        Original
+      </span>
     </div>
   )
 }

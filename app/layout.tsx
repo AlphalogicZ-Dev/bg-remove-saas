@@ -5,30 +5,27 @@ import Navbar from '@/components/Navbar'
 
 const inter = Inter({
   subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
   variable: '--font-inter',
   display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'ClearCut — AI Background Remover',
+  title: 'Remove Background from Image for Free – removebg',
   description:
-    'Remove image backgrounds instantly with AI. Free, fast, no signup required. Supports JPG and PNG.',
-  keywords: ['background remover', 'remove background', 'AI image editor', 'transparent PNG'],
+    'Remove image backgrounds 100% automatically and free. Upload a photo and get a clean transparent PNG in seconds. No signup required.',
+  keywords: ['remove background', 'background remover', 'transparent PNG', 'AI image editor'],
   openGraph: {
-    title: 'ClearCut — AI Background Remover',
-    description: 'Remove image backgrounds instantly. Free, fast, no signup required.',
+    title: 'Remove Background from Image for Free – removebg',
+    description: 'Remove image backgrounds 100% automatically. Free, fast, no signup required.',
     type: 'website',
   },
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="bg-[#0a0a0a] text-white antialiased min-h-screen">
+      <body className="bg-white text-gray-900 antialiased min-h-screen font-sans">
         <Navbar />
         {children}
       </body>
