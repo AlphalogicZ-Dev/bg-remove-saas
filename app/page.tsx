@@ -1,5 +1,8 @@
+export const dynamic = 'force-dynamic'
+
 import ProcessingQueue from '@/components/ProcessingQueue'
 import StunningQuality from '@/components/StunningQuality'
+import ScrollToTopButton from '@/components/ScrollToTopButton'
 
 export default function Home() {
   return (
@@ -9,7 +12,6 @@ export default function Home() {
       <section className="bg-gradient-to-b from-[#f0fdf8] via-white to-white pt-16 pb-20 px-5">
         <div className="max-w-3xl mx-auto text-center mb-12">
 
-          {/* Badge */}
           <div className="inline-flex items-center gap-2 bg-[#e6fff5] border border-[#00c27a]/20 rounded-full px-4 py-1.5 text-[#00875a] text-sm font-semibold mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-[#00c27a] animate-pulse-dot" />
             100% Automatically and Free
@@ -26,7 +28,6 @@ export default function Home() {
             with pixel-perfect precision. No sign-up required.
           </p>
 
-          {/* Feature pills */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 mt-7">
             {['JPG & PNG & WebP', 'Multiple images', 'Before/after preview', 'Download PNG', 'Cloud save'].map((f) => (
               <span key={f} className="text-xs text-gray-400 border border-gray-200 rounded-full px-3.5 py-1.5 font-medium bg-white">
@@ -36,7 +37,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Processing queue — main UI */}
         <div className="max-w-4xl mx-auto">
           <ProcessingQueue />
         </div>
@@ -110,7 +110,7 @@ export default function Home() {
               { icon: '🐾', bg: '#fee2e2', title: 'Pets & Animals', desc: 'Our AI excels at fur and fine hair. Perfect cutouts for even the fluffiest animals.' },
               { icon: '📱', bg: '#fce7f3', title: 'Social Media', desc: 'Create scroll-stopping content, transparent logos, and on-brand visuals for every platform.' },
             ].map((card) => (
-              <div key={card.title} className="bg-white border border-gray-200 rounded-2xl p-6 hover:border-[#00c27a]/40 hover:shadow-[0_6px_24px_rgba(0,194,122,0.1)] transition-all group">
+              <div key={card.title} className="bg-white border border-gray-200 rounded-2xl p-6 hover:border-[#00c27a]/40 hover:shadow-[0_6px_24px_rgba(0,194,122,0.1)] transition-all">
                 <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-4" style={{ background: card.bg }}>
                   {card.icon}
                 </div>
@@ -132,16 +132,8 @@ export default function Home() {
           <p className="text-gray-400 text-lg mb-8">
             No account needed. No watermarks. Just upload and download your perfect result.
           </p>
-          <a
-            href="#"
-            onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-            className="inline-flex items-center gap-2.5 bg-[#00c27a] hover:bg-[#00a868] active:scale-95 text-white font-bold text-base px-8 py-4 rounded-xl transition-all shadow-[0_4px_20px_rgba(0,194,122,0.4)]"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            Upload Your Image
-          </a>
+          {/* Client component handles the scroll onClick */}
+          <ScrollToTopButton />
         </div>
       </section>
 
