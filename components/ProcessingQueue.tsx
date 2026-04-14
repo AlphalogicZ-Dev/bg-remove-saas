@@ -43,7 +43,12 @@ export default function ProcessingQueue() {
         const blob = await removeBackground(job.file, (_stage, current, total) => {
           updateJob(job.id, { progress: total > 0 ? Math.round((current / total) * 100) : 0 })
         })
-        updateJob(job.id, { status: 'done', processedBlob: blob, processedUrl: URL.createObjectURL(blob), progress: 100 })
+        updateJob(job.id, {
+          status: 'done',
+          processedBlob: blob,
+          processedUrl: URL.createObjectURL(blob),
+          progress: 100,
+        })
       } catch (err) {
         console.error(err)
         updateJob(job.id, { status: 'error', error: 'Processing failed. Please try again.' })
@@ -76,13 +81,13 @@ export default function ProcessingQueue() {
   const queuedCount = jobs.filter((j) => j.status === 'queued').length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Dropzone onFiles={addFiles} disabled={isProcessing} />
 
       {/* First-run model notice */}
       {isProcessing && jobs.some((j) => j.status === 'processing' && j.progress < 5) && (
-        <div className="text-center text-sm text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-          First run: downloading AI model (~40MB) — cached after this for instant processing
+        <div className="text-center text-sm text-gray-400 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+          First run: downloading AI model (~40 MB) — cached after this for instant processing
         </div>
       )}
 
@@ -91,11 +96,11 @@ export default function ProcessingQueue() {
           {/* Status bar */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-4 text-sm text-gray-400">
-              <span className="font-medium text-gray-600">
+              <span className="font-semibold text-gray-600">
                 {jobs.length} image{jobs.length !== 1 ? 's' : ''}
               </span>
               {doneJobs.length > 0 && (
-                <span className="text-[#00c27a] font-semibold flex items-center gap-1.5">
+                <span className="text-[#ff0f50] font-semibold flex items-center gap-1.5">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
@@ -103,8 +108,8 @@ export default function ProcessingQueue() {
                 </span>
               )}
               {processingJob && (
-                <span className="text-[#00c27a] flex items-center gap-2 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00c27a] animate-pulse" />
+                <span className="text-[#ff0f50] flex items-center gap-2 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#ff0f50] animate-pulse" />
                   Processing… {processingJob.progress}%
                 </span>
               )}
@@ -124,7 +129,7 @@ export default function ProcessingQueue() {
           </div>
 
           {/* Image grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {jobs.map((job) => (
               <ImageCard key={job.id} job={job} onRemove={removeJob} />
             ))}

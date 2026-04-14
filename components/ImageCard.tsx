@@ -40,6 +40,7 @@ export default function ImageCard({ job, onRemove }: Props) {
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow group">
+
       {/* Image area */}
       <div className="relative aspect-square bg-gray-50">
 
@@ -58,10 +59,10 @@ export default function ImageCard({ job, onRemove }: Props) {
           <div className="absolute inset-0">
             <img src={job.originalUrl} alt="Processing" className="w-full h-full object-cover opacity-20" />
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6">
-              <div className="w-8 h-8 border-[2.5px] border-[#00c27a] border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-[2.5px] border-[#ff0f50] border-t-transparent rounded-full animate-spin" />
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <div
-                  className="bg-[#00c27a] h-1.5 rounded-full transition-all duration-300"
+                  className="bg-[#ff0f50] h-1.5 rounded-full transition-all duration-300"
                   style={{ width: `${job.progress}%` }}
                 />
               </div>
@@ -103,7 +104,7 @@ export default function ImageCard({ job, onRemove }: Props) {
               <>
                 <button
                   onClick={downloadImage}
-                  className="flex items-center gap-1.5 text-xs bg-[#00c27a] hover:bg-[#00a868] active:scale-95 text-white transition-all px-3 py-1.5 rounded-lg font-semibold"
+                  className="flex items-center gap-1.5 text-xs bg-[#ff0f50] hover:bg-[#e0003d] active:scale-95 text-white transition-all px-3 py-1.5 rounded-lg font-semibold shadow-[0_2px_8px_rgba(255,15,80,0.3)]"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -115,7 +116,7 @@ export default function ImageCard({ job, onRemove }: Props) {
                   disabled={saving || saved}
                   title={saved ? 'Saved!' : saveError ? 'Retry save' : 'Save to account'}
                   className={`text-xs px-2 py-1.5 rounded-lg transition-all ${
-                    saved ? 'text-[#00c27a]' : saveError ? 'text-red-400 hover:text-red-500' : 'text-gray-300 hover:text-gray-500'
+                    saved ? 'text-[#ff0f50]' : saveError ? 'text-red-400 hover:text-red-500' : 'text-gray-300 hover:text-gray-500'
                   }`}
                 >
                   {saving

@@ -4,9 +4,10 @@
 
 @layer base {
   :root {
-    --green: #00c27a;
-    --green-dark: #00a868;
-    --green-light: #e6fff5;
+    --primary: #ff0f50;
+    --primary-dark: #e0003d;
+    --primary-light: #fff0f3;
+    --accent: #FFD60A;
   }
 
   * { box-sizing: border-box; }

@@ -11,12 +11,12 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Remove Background from Image for Free – removebg',
+  title: 'Remove Image Background Free & Instantly – BgErase',
   description:
     'Remove image backgrounds 100% automatically and free. Upload a photo and get a clean transparent PNG in seconds. No signup required.',
-  keywords: ['remove background', 'background remover', 'transparent PNG', 'AI image editor'],
+  keywords: ['remove background', 'background remover', 'transparent PNG', 'AI image editor', 'BgErase'],
   openGraph: {
-    title: 'Remove Background from Image for Free – removebg',
+    title: 'Remove Image Background Free & Instantly – BgErase',
     description: 'Remove image backgrounds 100% automatically. Free, fast, no signup required.',
     type: 'website',
   },

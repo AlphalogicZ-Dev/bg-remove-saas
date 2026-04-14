@@ -22,57 +22,41 @@ export default function Navbar() {
   }, [])
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100">
-      <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+    <nav className="sticky top-0 z-50 bg-[#0f1117]/95 backdrop-blur-md border-b border-white/[0.06]">
+      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
 
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 font-black text-xl tracking-tight text-gray-900 hover:opacity-80 transition-opacity">
-          <div className="w-8 h-8 bg-[#00c27a] rounded-lg flex items-center justify-center">
-            <svg className="w-4.5 h-4.5 text-white" width="18" height="18" viewBox="0 0 24 24" fill="white">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 font-black text-xl tracking-tight text-white hover:opacity-80 transition-opacity"
+        >
+          <div className="w-8 h-8 bg-[#ff0f50] rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
             </svg>
           </div>
-          remove<span className="text-[#00c27a]">bg</span>
+          <span>Bg<span className="text-[#ff0f50]">Erase</span></span>
         </Link>
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {!loading && (
+          {!loading && user && (
             <>
-              {user ? (
-                <>
-                  <Link
-                    href="/dashboard"
-                    className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-50"
-                  >
-                    My Images
-                  </Link>
-                  <button
-                    onClick={async () => {
-                      await supabase.auth.signOut()
-                      window.location.href = '/'
-                    }}
-                    className="text-sm font-medium text-gray-400 hover:text-gray-700 transition-colors px-3 py-2 rounded-lg hover:bg-gray-50"
-                  >
-                    Sign out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/auth/login"
-                    className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-50"
-                  >
-                    Log In
-                  </Link>
-                  <Link
-                    href="/auth/login"
-                    className="text-sm font-semibold bg-[#00c27a] hover:bg-[#00a868] text-white transition-all px-4 py-2 rounded-lg active:scale-95"
-                  >
-                    Sign Up Free
-                  </Link>
-                </>
-              )}
+              <Link
+                href="/dashboard"
+                className="text-sm font-medium text-gray-400 hover:text-white transition-colors px-3 py-2 rounded-lg hover:bg-white/[0.06]"
+              >
+                My Images
+              </Link>
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut()
+                  window.location.href = '/'
+                }}
+                className="text-sm font-medium text-gray-500 hover:text-gray-300 transition-colors px-3 py-2 rounded-lg hover:bg-white/[0.06]"
+              >
+                Sign out
+              </button>
             </>
           )}
         </div>

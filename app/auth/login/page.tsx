@@ -35,15 +35,15 @@ export default function LoginPage() {
   if (sent) {
     return (
       <div className="max-w-md mx-auto mt-24 px-4 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-[#e6fff5] flex items-center justify-center mx-auto mb-5">
-          <svg className="w-8 h-8 text-[#00c27a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-16 h-16 rounded-2xl bg-[#fff0f3] flex items-center justify-center mx-auto mb-5">
+          <svg className="w-8 h-8 text-[#ff0f50]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
           </svg>
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h2>
         <p className="text-gray-500 leading-relaxed">
           We sent a magic link to{' '}
-          <span className="text-[#00c27a] font-semibold">{email}</span>.
+          <span className="text-[#ff0f50] font-semibold">{email}</span>.
           <br />Click the link to sign in.
         </p>
         <button onClick={() => setSent(false)} className="mt-5 text-sm text-gray-400 hover:text-gray-600 transition-colors">
@@ -63,7 +63,7 @@ export default function LoginPage() {
             </svg>
             Back
           </Link>
-          <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-0.5px' }}>Sign in to removebg</h2>
+          <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-0.5px' }}>Sign in to BgErase</h2>
           <p className="text-gray-400 text-sm mt-1.5">Save your processed images and access them anywhere</p>
         </div>
 
@@ -98,13 +98,13 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-[#00c27a] focus:ring-2 focus:ring-[#00c27a]/15 transition-all text-sm"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-[#ff0f50] focus:ring-2 focus:ring-[#ff0f50]/12 transition-all text-sm"
           />
           {error && <p className="text-red-500 text-xs">{error}</p>}
           <button
             type="submit"
             disabled={loading || !email}
-            className="w-full bg-[#00c27a] hover:bg-[#00a868] active:scale-[0.99] transition-all py-3 px-4 rounded-xl font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+            className="w-full bg-[#ff0f50] hover:bg-[#e0003d] active:scale-[0.99] transition-all py-3 px-4 rounded-xl font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed text-sm"
           >
             {loading
               ? <span className="flex items-center justify-center gap-2">
