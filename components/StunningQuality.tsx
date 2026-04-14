@@ -12,42 +12,56 @@ const SAMPLES = [
   {
     id: 1,
     label: 'Portrait',
-    thumb: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=80&h=80&fit=crop&crop=face',
-    src: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=800&h=600&fit=crop&crop=face',
+    // thumb: tiny WebP for the thumbnail strip
+    thumb: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=72&h=72&fit=crop&crop=face&fm=webp&q=60',
+    // display: what the <img> tag renders — WebP keeps it visually crisp but fast
+    display: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=640&h=480&fit=crop&crop=face&fm=webp&q=72',
+    // process: what gets sent to the WASM model — smaller = faster download + faster AI
+    process: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=480&h=360&fit=crop&crop=face&fm=webp&q=80',
   },
   {
     id: 2,
     label: 'Animal',
-    thumb: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=80&h=80&fit=crop',
-    src: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800&h=600&fit=crop',
+    thumb: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=72&h=72&fit=crop&fm=webp&q=60',
+    display: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=640&h=480&fit=crop&fm=webp&q=72',
+    process: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=480&h=360&fit=crop&fm=webp&q=80',
   },
   {
     id: 3,
     label: 'Product',
-    thumb: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=80&h=80&fit=crop',
-    src: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&h=600&fit=crop',
+    thumb: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=72&h=72&fit=crop&fm=webp&q=60',
+    display: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=640&h=480&fit=crop&fm=webp&q=72',
+    process: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=480&h=360&fit=crop&fm=webp&q=80',
   },
   {
     id: 4,
     label: 'Pet',
-    thumb: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=80&h=80&fit=crop',
-    src: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=800&h=600&fit=crop',
+    thumb: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=72&h=72&fit=crop&fm=webp&q=60',
+    display: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=640&h=480&fit=crop&fm=webp&q=72',
+    process: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=480&h=360&fit=crop&fm=webp&q=80',
   },
   {
     id: 5,
     label: 'E-commerce',
-    thumb: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=80&h=80&fit=crop',
-    src: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&h=600&fit=crop',
+    thumb: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=72&h=72&fit=crop&fm=webp&q=60',
+    display: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=640&h=480&fit=crop&fm=webp&q=72',
+    process: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=480&h=360&fit=crop&fm=webp&q=80',
   },
 ]
 
 // Module-level cache — persists across re-renders
 const resultCache = new Map<string, string>()
 
+/** Eagerly prefetch an image URL into the browser cache (fire-and-forget). */
+function prefetchImage(url: string) {
+  const img = new window.Image()
+  img.src = url
+}
+
 async function getProcessed(src: string, onProgress?: (pct: number) => void): Promise<string> {
   if (resultCache.has(src)) return resultCache.get(src)!
 
-  // Fetch the image via the browser (Unsplash serves CORS-safe responses)
+  // Fetch the (small) process URL — Unsplash serves CORS-safe responses
   const res = await fetch(src)
   const blob = await res.blob()
 
@@ -87,7 +101,7 @@ function ComparisonSlider({
   processing,
   progress,
 }: {
-  before: string
+  before: string   // display URL (WebP, fast)
   after: string | null
   processing: boolean
   progress: number
@@ -279,12 +293,12 @@ export default function StunningQuality() {
   const isProcessing = processingRef.current.has(activeId)
   const progress = progressMap[activeId] ?? 0
 
-  const processActive = useCallback(async (id: number, src: string) => {
-    if (processingRef.current.has(id) || resultCache.has(src)) return
+  const processActive = useCallback(async (id: number, processUrl: string) => {
+    if (processingRef.current.has(id) || resultCache.has(processUrl)) return
     processingRef.current.add(id)
-    setAfterMap((m) => ({ ...m, [id]: null })) // trigger processing state
+    setAfterMap((m) => ({ ...m, [id]: null }))
     try {
-      const url = await getProcessed(src, (pct) => {
+      const url = await getProcessed(processUrl, (pct) => {
         setProgressMap((m) => ({ ...m, [id]: pct }))
       })
       setAfterMap((m) => ({ ...m, [id]: url }))
@@ -295,17 +309,22 @@ export default function StunningQuality() {
     }
   }, [])
 
+  // Prefetch all display images into the browser cache immediately on mount
+  useEffect(() => {
+    SAMPLES.forEach((s) => prefetchImage(s.display))
+  }, [])
+
   // Start processing active sample on mount + on switch
   useEffect(() => {
     if (!afterMap[activeId] && !processingRef.current.has(activeId)) {
-      processActive(activeId, active.src)
+      processActive(activeId, active.process)
     }
-    // Pre-fetch next sample quietly
+    // Silently pre-process the next sample
     const next = SAMPLES.find((s) => s.id > activeId)
     if (next && !afterMap[next.id] && !processingRef.current.has(next.id)) {
-      processActive(next.id, next.src)
+      processActive(next.id, next.process)
     }
-  }, [activeId, active.src, afterMap, processActive])
+  }, [activeId, active.process, afterMap, processActive])
 
   return (
     <section className="bg-[#0f1117] py-24 px-5 overflow-hidden">
@@ -385,7 +404,7 @@ export default function StunningQuality() {
           <div className="flex flex-col gap-5">
             <ComparisonSlider
               key={activeId}
-              before={active.src}
+              before={active.display}
               after={afterMap[activeId] ?? null}
               processing={isProcessing || (afterMap[activeId] === null && processingRef.current.has(activeId))}
               progress={progress}
