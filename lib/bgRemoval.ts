@@ -1,42 +1,33 @@
 import type { ImageSource } from '@imgly/background-removal'
+import { defringe } from './defringe'
 
 let modelLoaded = false
 
 export type ProgressCallback = (stage: string, current: number, total: number) => void
 
-/**
- * Removes the background from an image file using @imgly/background-removal.
- * This runs entirely in the browser via WebAssembly — no server calls needed.
- *
- * The first call downloads ~40MB of model weights from the CDN.
- * Subsequent calls use the browser cache — near-instant model load.
- *
- * @param file     - The image File object (JPG or PNG)
- * @param onProgress - Optional progress callback (stage, current, total)
- * @returns        - A Blob of the processed image in PNG format (transparent background)
- */
 export async function removeBackground(
   file: File,
   onProgress?: ProgressCallback
 ): Promise<Blob> {
-  // Dynamic import avoids SSR issues — this function only runs in the browser
   const { removeBackground: removeBg } = await import('@imgly/background-removal')
 
   if (!modelLoaded) {
-    console.log('[ClearCut] Loading AI model... (~40MB, cached after first use)')
+    console.log('[bgremove] Loading AI model… (~40 MB, cached after first use)')
     modelLoaded = true
   }
 
-  const result = await removeBg(file as ImageSource, {
-    model: 'medium', // Options: 'small' (fastest), 'medium' (balanced), 'large' (best quality)
-    output: {
-      format: 'image/png',
-      quality: 0.95,
-    },
+  // Phase 1 — model inference (0–90%)
+  const rough = await removeBg(file as ImageSource, {
+    model: 'medium',
+    output: { format: 'image/png', quality: 1 },
     progress: (key: string, current: number, total: number) => {
-      onProgress?.(key, current, total)
+      if (total > 0) onProgress?.(key, Math.round((current / total) * 90), 100)
     },
   })
 
-  return result
+  // Phase 2 — defringe: removes white halo from semi-transparent edge pixels (90–100%)
+  onProgress?.('Cleaning edges', 90, 100)
+  const clean = await defringe(rough)
+  onProgress?.('Done', 100, 100)
+  return clean
 }
