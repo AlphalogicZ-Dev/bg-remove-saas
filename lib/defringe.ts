@@ -1,26 +1,40 @@
 'use client'
 
-// World-class edge cleanup for @imgly background-removal output.
+// ─── Why the previous approach failed ────────────────────────────────────────
 //
-// Two problems solved:
+// Bug 1 — premultiplied alpha zeroes transparent RGB
+//   Canvas getImageData returns PREMULTIPLIED values.  When alpha = 0, the
+//   browser stores rgba(0,0,0,0) regardless of the original colour.  Reading
+//   "background colour" from transparent pixels always returned black, so
+//   decontamination was subtracting black = doing nothing, or making things worse.
 //
-//  1. WHITE HALO — semi-transparent edge pixels still carry the original
-//     background colour in their RGB channels. Solved with the matting equation:
-//       fg = (composite − (1−α)·bg) / α
-//     Background colour is estimated from both image corners (reliable for
-//     portraits where the subject fills the frame) and local transparent pixels
-//     (reliable for objects on complex backgrounds). The two estimates are
-//     blended by confidence so neither degrades the other.
+// Bug 2 — wrong matting formula for premultiplied data
+//   The correct formula in STRAIGHT-alpha space is:
+//     fg = (composite − (1−α)·bg) / α
+//   But canvas stores PREMULTIPLIED composite (pm = composite · α).
+//   The correct formula for premultiplied canvas data is:
+//     pm_fg = pm · 255/α  −  (1−α) · bg
+//   Using the straight-alpha formula on premultiplied data amplifies the
+//   contamination instead of removing it.
 //
-//  2. TRACES / OUTER FRINGE — the outermost semi-transparent pixels are so
-//     heavily contaminated with background colour that decontamination alone
-//     can't fully recover them. A 1-pixel alpha choke (morphological erosion
-//     of the alpha channel) eliminates this layer entirely, giving a crisp,
-//     zero-trace edge. Only applied to the true fringe — interior soft alpha
-//     (hair, fur, glass) is preserved.
+// Fix — read background from the ORIGINAL FILE
+//   The original photo is fully opaque everywhere (alpha=255 for every pixel),
+//   so premultiplication has zero effect.  We use @imgly's alpha channel as a
+//   mask: wherever alpha < threshold the pixel WAS background in the original —
+//   so we sample the original file at those positions to get the true bg colour.
+//   This gives a perfect local background estimate with no premul artefacts.
 
-// ─── Summed-area box blur — O(N) regardless of radius ────────────────────────
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
+async function toImageData(src: Blob | File, w: number, h: number): Promise<ImageData> {
+  const bmp    = await createImageBitmap(src)
+  const canvas = new OffscreenCanvas(w, h)
+  const ctx    = canvas.getContext('2d')!
+  ctx.drawImage(bmp, 0, 0, w, h)
+  return ctx.getImageData(0, 0, w, h)
+}
+
+// O(N) box blur via summed-area table — radius has zero effect on performance
 function boxBlur(src: Float32Array, w: number, h: number, r: number): Float32Array {
   const sw  = w + 1
   const sat = new Float64Array(sw * (h + 1))
@@ -41,91 +55,101 @@ function boxBlur(src: Float32Array, w: number, h: number, r: number): Float32Arr
   return out
 }
 
-// ─── Background colour estimation ────────────────────────────────────────────
+// ─── Background colour map ────────────────────────────────────────────────────
+//
+// Samples the ORIGINAL image at positions where @imgly says the pixel is
+// transparent (alpha < threshold).  Because the original is fully opaque,
+// canvas premultiplication doesn't alter those RGB values (pm = r · 255/255 = r).
+// Box-blur the samples to get a smooth per-pixel background colour everywhere.
 
-// Samples a rectangular region and returns its average colour + weight.
-// Weight = fraction of pixels that are near-transparent (α < 20%).
-function sampleRegion(d: Uint8ClampedArray, w: number,
-  x0: number, y0: number, x1: number, y1: number
-): [number, number, number, number] {
-  let r = 0, g = 0, b = 0, n = 0
-  for (let y = y0; y < y1; y++)
-    for (let x = x0; x < x1; x++) {
-      const i = (y * w + x) * 4
-      if (d[i+3] < 51) { r += d[i]; g += d[i+1]; b += d[i+2]; n++ }
-    }
-  return n > 0 ? [r/n, g/n, b/n, n] : [255, 255, 255, 0]
-}
-
-// Builds a per-pixel background colour map by combining:
-//  • Local estimate  — box blur of near-transparent pixels (radius = 4% of image)
-//  • Corner estimate — average colour of the four image corners (20×20px each)
-// The local estimate dominates where there are enough transparent pixels nearby;
-// the corner estimate fills in where the subject fills the whole frame.
-function buildBgMap(d: Uint8ClampedArray, w: number, h: number): {
-  r: Float32Array; g: Float32Array; b: Float32Array
-} {
+function buildBgMap(
+  origPx: Uint8ClampedArray,     // original image pixels (fully opaque — no premul issue)
+  maskPx: Uint8ClampedArray,     // @imgly output (premultiplied, alpha is the mask)
+  w: number, h: number
+): { r: Float32Array; g: Float32Array; b: Float32Array } {
   const n      = w * h
   const radius = Math.max(24, Math.round(Math.min(w, h) * 0.05))
-  const cs     = Math.min(30, Math.round(Math.min(w, h) * 0.06))  // corner size
 
-  // Corner colour (global fallback — critical for portraits that fill the frame)
-  const corners = [
-    sampleRegion(d, w, 0, 0, cs, cs),
-    sampleRegion(d, w, w-cs, 0, w, cs),
-    sampleRegion(d, w, 0, h-cs, cs, h),
-    sampleRegion(d, w, w-cs, h-cs, w, h),
-  ]
-  let cR = 0, cG = 0, cB = 0, cN = 0
-  for (const [r, g, b, n_] of corners) { cR += r*n_; cG += g*n_; cB += b*n_; cN += n_ }
-  if (cN === 0) { cR = 255 * 4; cG = 255 * 4; cB = 255 * 4; cN = 4 }
-  const cornerR = cR / cN, cornerG = cG / cN, cornerB = cB / cN
-
-  // Local estimate — weighted by proximity to transparent pixels
   const bR = new Float32Array(n), bG = new Float32Array(n),
         bB = new Float32Array(n), bW = new Float32Array(n)
+
   for (let i = 0; i < n; i++) {
-    if (d[i*4+3] < 26) {                          // α < 10% = definite background
-      bR[i] = d[i*4]; bG[i] = d[i*4+1]; bB[i] = d[i*4+2]; bW[i] = 1
+    const a = maskPx[i*4+3]
+    if (a < 26) {                             // @imgly says ≤10% alpha = background
+      const w_ = 1 - a / 255                 // near-zero alpha = high confidence bg
+      bR[i] = origPx[i*4]   * w_             // original file has true bg colour
+      bG[i] = origPx[i*4+1] * w_
+      bB[i] = origPx[i*4+2] * w_
+      bW[i] = w_
     }
   }
+
   const sR = boxBlur(bR, w, h, radius), sG = boxBlur(bG, w, h, radius),
         sB = boxBlur(bB, w, h, radius), sW = boxBlur(bW, w, h, radius)
 
-  // Blend: local dominates when confident (sW > 0.1), corners fill in otherwise
   const lR = new Float32Array(n), lG = new Float32Array(n), lB = new Float32Array(n)
   for (let i = 0; i < n; i++) {
-    const wLocal = Math.min(1, sW[i] / 0.1)   // confidence 0→1
-    const wCorner = 1 - wLocal
-    lR[i] = wLocal * (sR[i] / Math.max(sW[i], 1e-6)) + wCorner * cornerR
-    lG[i] = wLocal * (sG[i] / Math.max(sW[i], 1e-6)) + wCorner * cornerG
-    lB[i] = wLocal * (sB[i] / Math.max(sW[i], 1e-6)) + wCorner * cornerB
+    if (sW[i] > 1e-4) {
+      lR[i] = sR[i] / sW[i]
+      lG[i] = sG[i] / sW[i]
+      lB[i] = sB[i] / sW[i]
+    }
   }
   return { r: lR, g: lG, b: lB }
 }
 
-// ─── Alpha choke — 1-pixel erosion of the alpha channel ──────────────────────
-// The outermost fringe pixels are so heavily mixed with background that matting
-// correction can't fully recover them. Eroding the alpha channel by 1px removes
-// this layer entirely. Only pixels that are already semi-transparent are affected
-// (α < 250); fully opaque interior pixels are never touched.
+// ─── Foreground decontamination — correct premultiplied formula ───────────────
+//
+// Canvas stores premultiplied composite:  pm = composite · α/255
+// Matting equation in straight-alpha space:  fg = (composite − (1−α)·bg) / α
+// Substituting composite = pm · 255/α:
+//   pm_fg = fg · α/255 = composite − (1−α)·bg = pm·255/α − (1−α)·bg
+//
+// This is stored back as the new premultiplied foreground value.
+
+function decontaminatePx(
+  d: Uint8ClampedArray,
+  bg: { r: Float32Array; g: Float32Array; b: Float32Array },
+  n: number
+): void {
+  for (let i = 0; i < n; i++) {
+    const a = d[i*4+3]
+    if (a < 6 || a > 250) continue           // skip fully transparent / opaque
+    if (bg.r[i] === 0 && bg.g[i] === 0 && bg.b[i] === 0) continue  // no bg sample
+
+    const inv = 255.0 / a                    // 255/alpha — converts pm → straight
+    const af  = a / 255.0                    // alpha fraction
+
+    // Correct premultiplied decontamination:  pm_fg = pm·255/α − (1−α)·bg
+    d[i*4]   = Math.max(0, Math.min(255, Math.round(d[i*4]   * inv - (1-af) * bg.r[i])))
+    d[i*4+1] = Math.max(0, Math.min(255, Math.round(d[i*4+1] * inv - (1-af) * bg.g[i])))
+    d[i*4+2] = Math.max(0, Math.min(255, Math.round(d[i*4+2] * inv - (1-af) * bg.b[i])))
+    // alpha unchanged — we only fix the colour, not the mask
+  }
+}
+
+// ─── Alpha choke — removes the outermost contaminated fringe ─────────────────
+//
+// The very outermost semi-transparent pixels are so heavily mixed with
+// background that even correct decontamination leaves a faint cast.
+// A 1-pixel choke zeros any pixel that borders a near-transparent pixel,
+// cleanly removing this layer.  Interior soft-alpha (hair strands, fur)
+// is untouched because all its neighbours are opaque.
 
 function alphaChoke(d: Uint8ClampedArray, w: number, h: number): void {
-  const orig = new Uint8Array(d.length / 4)
-  for (let i = 0; i < orig.length; i++) orig[i] = d[i*4+3]
+  const alpha = new Uint8Array(w * h)
+  for (let i = 0; i < w*h; i++) alpha[i] = d[i*4+3]
 
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x
-      if (orig[i] === 0) continue            // already transparent — skip
-      // Minimum alpha among the 4-connected neighbours
-      const minNeighbour = Math.min(
-        orig[(y-1)*w+x], orig[(y+1)*w+x],
-        orig[y*w+(x-1)], orig[y*w+(x+1)]
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      const i = y*w+x
+      if (alpha[i] === 0) continue
+      const minN = Math.min(
+        alpha[(y-1)*w+x], alpha[(y+1)*w+x],
+        alpha[y*w+(x-1)], alpha[y*w+(x+1)]
       )
-      // Only choke if the pixel is in the fringe (at least one fully/near-transparent neighbour)
-      if (minNeighbour < 26) {
-        d[i*4+3] = 0
+      if (minN < 26) {
+        d[i*4] = 0; d[i*4+1] = 0; d[i*4+2] = 0; d[i*4+3] = 0
       }
     }
   }
@@ -133,37 +157,62 @@ function alphaChoke(d: Uint8ClampedArray, w: number, h: number): void {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export async function defringe(blob: Blob): Promise<Blob> {
-  const bmp    = await createImageBitmap(blob)
+export async function defringe(blob: Blob, originalFile?: File): Promise<Blob> {
+  const bmp            = await createImageBitmap(blob)
   const { width: w, height: h } = bmp
-  const canvas = new OffscreenCanvas(w, h)
-  const ctx    = canvas.getContext('2d')!
-  ctx.drawImage(bmp, 0, 0)
-  const id = ctx.getImageData(0, 0, w, h)
-  const d  = id.data
-  const n  = w * h
+  const n              = w * h
 
-  // 1. Build per-pixel background colour map
-  const bg = buildBgMap(d, w, h)
+  // @imgly output — premultiplied alpha in canvas
+  const maskCanvas = new OffscreenCanvas(w, h)
+  const maskCtx    = maskCanvas.getContext('2d')!
+  maskCtx.drawImage(bmp, 0, 0)
+  const maskId = maskCtx.getImageData(0, 0, w, h)
+  const d      = maskId.data
 
-  // 2. Decontaminate semi-transparent edge pixels
-  for (let i = 0; i < n; i++) {
-    const a = d[i*4+3]
-    if (a < 5 || a > 250) continue            // fully transparent / opaque — skip
+  // Background colour map — from original file when available, else fall back
+  // to near-transparent pixel estimation (less accurate but still better than before)
+  let bg: { r: Float32Array; g: Float32Array; b: Float32Array }
 
-    const af = a / 255
-    d[i*4]   = Math.max(0, Math.min(255, Math.round((d[i*4]   - (1 - af) * bg.r[i]) / Math.max(af, 0.01))))
-    d[i*4+1] = Math.max(0, Math.min(255, Math.round((d[i*4+1] - (1 - af) * bg.g[i]) / Math.max(af, 0.01))))
-    d[i*4+2] = Math.max(0, Math.min(255, Math.round((d[i*4+2] - (1 - af) * bg.b[i]) / Math.max(af, 0.01))))
+  if (originalFile) {
+    // PREFERRED PATH: read bg from original (fully opaque — no premul corruption)
+    const origId = await toImageData(originalFile, w, h)
+    bg = buildBgMap(origId.data, d, w, h)
+  } else {
+    // FALLBACK PATH: estimate bg from near-transparent pixels using unmultiplied approx
+    // pm = composite·α, so composite ≈ bg for small α → bg ≈ pm·255/α
+    const radius = Math.max(24, Math.round(Math.min(w, h) * 0.05))
+    const bR = new Float32Array(n), bG = new Float32Array(n),
+          bB = new Float32Array(n), bW = new Float32Array(n)
+    for (let i = 0; i < n; i++) {
+      const a = d[i*4+3]
+      if (a >= 6 && a <= 64) {               // 2–25% alpha: dominated by background
+        const inv = 255.0 / a
+        const w_  = (1 - a/255) ** 2
+        bR[i] = Math.min(255, d[i*4]   * inv) * w_
+        bG[i] = Math.min(255, d[i*4+1] * inv) * w_
+        bB[i] = Math.min(255, d[i*4+2] * inv) * w_
+        bW[i] = w_
+      }
+    }
+    const sR = boxBlur(bR, w, h, radius), sG = boxBlur(bG, w, h, radius),
+          sB = boxBlur(bB, w, h, radius), sW = boxBlur(bW, w, h, radius)
+    const lR = new Float32Array(n), lG = new Float32Array(n), lB = new Float32Array(n)
+    for (let i = 0; i < n; i++) {
+      if (sW[i] > 1e-4) { lR[i] = sR[i]/sW[i]; lG[i] = sG[i]/sW[i]; lB[i] = sB[i]/sW[i] }
+    }
+    bg = { r: lR, g: lG, b: lB }
   }
 
-  // 3. Choke: remove the outermost fringe layer that can't be cleanly decontaminated
+  // 1. Decontaminate edge pixels using correct premultiplied formula
+  decontaminatePx(d, bg, n)
+
+  // 2. Choke: zero the outermost fringe that can't be cleanly recovered
   alphaChoke(d, w, h)
 
-  // 4. Zero out near-transparent pixels — eliminates all remaining traces
+  // 3. Zero all near-transparent remnants — no traces left anywhere
   for (let i = 0; i < n; i++)
     if (d[i*4+3] < 10) { d[i*4] = 0; d[i*4+1] = 0; d[i*4+2] = 0; d[i*4+3] = 0 }
 
-  ctx.putImageData(id, 0, 0)
-  return canvas.convertToBlob({ type: 'image/png' })
+  maskCtx.putImageData(maskId, 0, 0)
+  return maskCanvas.convertToBlob({ type: 'image/png' })
 }

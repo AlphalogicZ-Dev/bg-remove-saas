@@ -27,7 +27,7 @@ export async function removeBackground(
 
   // Phase 2 — defringe: removes white halo from semi-transparent edge pixels (90–100%)
   onProgress?.('Cleaning edges', 90, 100)
-  const clean = await defringe(rough)
+  const clean = await defringe(rough, file)   // pass original so bg colour is read from true pixels
   onProgress?.('Done', 100, 100)
   return clean
 }
