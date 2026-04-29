@@ -57,6 +57,14 @@ export default function ProcessingQueue() {
     setIsProcessing(false)
   }, [updateJob])
 
+  const updateMask = useCallback((id: string, blob: Blob, url: string) => {
+    setJobs((prev) => prev.map((j) => {
+      if (j.id !== id) return j
+      if (j.processedUrl) URL.revokeObjectURL(j.processedUrl)
+      return { ...j, processedBlob: blob, processedUrl: url }
+    }))
+  }, [])
+
   const removeJob = useCallback((id: string) => {
     setJobs((prev) => {
       const j = prev.find((x) => x.id === id)
@@ -131,7 +139,7 @@ export default function ProcessingQueue() {
           {/* Image grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {jobs.map((job) => (
-              <ImageCard key={job.id} job={job} onRemove={removeJob} />
+              <ImageCard key={job.id} job={job} onRemove={removeJob} onMaskUpdate={updateMask} />
             ))}
           </div>
         </>

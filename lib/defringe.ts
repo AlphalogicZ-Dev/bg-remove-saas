@@ -192,6 +192,83 @@ function applyRefinedAlpha(
   }
 }
 
+// ── defringeWithMask — apply matting to a user-supplied mask ─────────────────
+//
+// Used by the MaskEditor: user has painted a mask, we run guided-filter
+// refinement + decontamination to produce a clean PNG.
+//
+// Unlike defringe(), the input here is STRAIGHT-alpha data built from the
+// original image colours + user mask, so no premultiplied corrections needed
+// — we only run the guided filter and hard cleanup.
+
+export async function defringeWithMask(
+  maskAlpha: Uint8Array,     // one byte per pixel [0,255], length = w*h
+  w: number, h: number,
+  originalFile: File
+): Promise<Blob> {
+  const n = w * h
+
+  // Decode original image
+  const origBmp = await createImageBitmap(originalFile)
+  const origC   = new OffscreenCanvas(w, h)
+  const origCtx = origC.getContext('2d')!
+  origCtx.drawImage(origBmp, 0, 0, w, h)
+  const origId  = origCtx.getImageData(0, 0, w, h)
+  const origPx  = origId.data
+
+  // Build straight-alpha composite: original RGB + mask alpha
+  const outCanvas = new OffscreenCanvas(w, h)
+  const outCtx    = outCanvas.getContext('2d')!
+  const outId     = outCtx.createImageData(w, h)
+  const d         = outId.data
+  for (let i = 0; i < n; i++) {
+    d[i*4]   = origPx[i*4]
+    d[i*4+1] = origPx[i*4+1]
+    d[i*4+2] = origPx[i*4+2]
+    d[i*4+3] = maskAlpha[i]
+  }
+
+  // Guided filter refinement — original luminance as guide
+  const roughAlpha = new Float32Array(n)
+  for (let i = 0; i < n; i++) roughAlpha[i] = maskAlpha[i] / 255.0
+
+  const lum = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    lum[i] = (0.2126 * origPx[i*4] + 0.7152 * origPx[i*4+1] + 0.0722 * origPx[i*4+2]) / 255.0
+  }
+
+  const gfR     = Math.max(5, Math.round(Math.min(w, h) * 0.008))
+  const refined = guidedFilter(lum, roughAlpha, w, h, gfR, 1e-3)
+
+  // Apply refined alpha — straight-alpha data, no premul rescaling needed
+  for (let i = 0; i < n; i++) {
+    d[i*4+3] = Math.round(refined[i] * 255)
+  }
+
+  // Decontaminate using original as background reference
+  // Build bg map from areas where mask says background
+  const bg = buildBgMap(origPx, roughAlpha, w, h)
+  // For straight-alpha data, decontamination formula simplifies:
+  // straight_fg = straight_composite - (1-alpha) * bg
+  for (let i = 0; i < n; i++) {
+    const a = d[i*4+3]
+    if (a < 8 || a > 248) continue
+    if (bg.r[i] === 0 && bg.g[i] === 0 && bg.b[i] === 0) continue
+    const af = a / 255.0
+    d[i*4]   = Math.max(0, Math.min(255, Math.round(d[i*4]   - (1 - af) * bg.r[i])))
+    d[i*4+1] = Math.max(0, Math.min(255, Math.round(d[i*4+1] - (1 - af) * bg.g[i])))
+    d[i*4+2] = Math.max(0, Math.min(255, Math.round(d[i*4+2] - (1 - af) * bg.b[i])))
+  }
+
+  // Hard cleanup
+  for (let i = 0; i < n; i++) {
+    if (d[i*4+3] < 8) { d[i*4] = 0; d[i*4+1] = 0; d[i*4+2] = 0; d[i*4+3] = 0 }
+  }
+
+  outCtx.putImageData(outId, 0, 0)
+  return outCanvas.convertToBlob({ type: 'image/png' })
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function defringe(blob: Blob, originalFile?: File): Promise<Blob> {
