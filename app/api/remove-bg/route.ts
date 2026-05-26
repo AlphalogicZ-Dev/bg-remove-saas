@@ -1,19 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// ── Vercel function timeout ────────────────────────────────────────────────────
+// Replicate cold-starts can take 30–60 s. Set the route's max duration
+// explicitly so Vercel doesn't silently apply a lower project-level default.
+// Hobby plan hard cap: 300 s. Pro/Enterprise cap: 800 s.
+export const maxDuration = 300
+
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN
-const MODEL = 'extrapolate/birefnet'
-const PREDICTIONS_URL = `https://api.replicate.com/v1/models/${MODEL}/predictions`
+
+// ── IMPORTANT: extrapolate/birefnet is a community model, NOT an official one.
+// Community models MUST use POST /v1/predictions (not /v1/models/.../predictions)
+// and MUST include a "version" field with the 64-char version ID.
+//
+// To find your version ID:
+//   curl -s -H "Authorization: Bearer $REPLICATE_API_TOKEN" \
+//     https://api.replicate.com/v1/models/extrapolate/birefnet/versions \
+//     | jq '.results[0].id'
+//
+// Or: replicate.com/extrapolate/birefnet → Versions tab (must be logged in)
+const REPLICATE_VERSION = process.env.REPLICATE_BIREFNET_VERSION ?? ''
+const PREDICTIONS_URL   = 'https://api.replicate.com/v1/predictions'
 
 // Replicate free-tier cold starts can take 30–60 s; paid is faster.
-// We poll for up to 3 minutes total.
+// Poll for up to 4 minutes — stays well within the 300 s Vercel cap.
 const POLL_INTERVAL_MS = 1_500
-const POLL_TIMEOUT_MS  = 180_000
+const POLL_TIMEOUT_MS  = 240_000
 const MAX_FILE_BYTES   = 10 * 1024 * 1024   // 10 MB safety cap
 
 export async function POST(req: NextRequest) {
   if (!REPLICATE_API_TOKEN) {
     return NextResponse.json(
       { error: 'REPLICATE_API_TOKEN is not set' },
+      { status: 500 }
+    )
+  }
+  if (!REPLICATE_VERSION) {
+    return NextResponse.json(
+      { error: 'REPLICATE_BIREFNET_VERSION is not set — see route.ts comments' },
       { status: 500 }
     )
   }
@@ -43,6 +66,8 @@ export async function POST(req: NextRequest) {
   const dataUri  = `data:${imageFile.type};base64,${base64}`
 
   // ── 2. Create prediction ─────────────────────────────────────────────────
+  // Use POST /v1/predictions (not /v1/models/.../predictions — that's official only).
+  // Must include "version": the 64-char version ID of extrapolate/birefnet.
   let predictionId: string
   try {
     const createRes = await fetch(PREDICTIONS_URL, {
@@ -50,11 +75,12 @@ export async function POST(req: NextRequest) {
       headers: {
         Authorization:  `Bearer ${REPLICATE_API_TOKEN}`,
         'Content-Type': 'application/json',
-        // Ask Replicate to wait up to 60 s before returning a URL to poll
+        // Ask Replicate to block up to 60 s before requiring a poll loop
         Prefer: 'wait=60',
       },
       body: JSON.stringify({
-        input: { image: dataUri },
+        version: REPLICATE_VERSION,
+        input:   { image: dataUri },
       }),
     })
 
