@@ -8,16 +8,8 @@ export const maxDuration = 300
 
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN
 
-// ── IMPORTANT: extrapolate/birefnet is a community model, NOT an official one.
-// Community models MUST use POST /v1/predictions (not /v1/models/.../predictions)
-// and MUST include a "version" field with the 64-char version ID.
-//
-// To find your version ID:
-//   curl -s -H "Authorization: Bearer $REPLICATE_API_TOKEN" \
-//     https://api.replicate.com/v1/models/extrapolate/birefnet/versions \
-//     | jq '.results[0].id'
-//
-// Or: replicate.com/extrapolate/birefnet → Versions tab (must be logged in)
+// Model: men1scus/birefnet (community model — must use /v1/predictions + version ID)
+// Version: f74986db0355b58403ed20963af156525e2891ea3c2d499bfbfb2a28cd87c5d7
 const REPLICATE_VERSION = process.env.REPLICATE_BIREFNET_VERSION ?? ''
 const PREDICTIONS_URL   = 'https://api.replicate.com/v1/predictions'
 
