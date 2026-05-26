@@ -78,24 +78,41 @@ export async function POST(req: NextRequest) {
 
     if (!createRes.ok) {
       const errBody = await createRes.text().catch(() => '')
-      console.error('[remove-bg] Replicate create error', createRes.status, errBody)
+      console.error('[remove-bg] Replicate create failed', {
+        status:  createRes.status,
+        headers: Object.fromEntries(createRes.headers.entries()),
+        body:    errBody,
+      })
       return NextResponse.json(
-        { error: `Replicate error: ${createRes.status}` },
+        { error: `Replicate error: ${createRes.status}`, detail: errBody },
         { status: 502 }
       )
     }
 
     const prediction = await createRes.json()
+    console.log('[remove-bg] Replicate create response', JSON.stringify(prediction, null, 2))
 
     // If Prefer:wait resolved synchronously, output may already be ready
     if (prediction.status === 'succeeded' && prediction.output) {
+      console.log('[remove-bg] Resolved synchronously, output:', prediction.output)
       return streamReplicateImage(prediction.output, REPLICATE_API_TOKEN)
+    }
+
+    if (prediction.status === 'failed') {
+      console.error('[remove-bg] Prediction already failed on create:', prediction.error)
+      return NextResponse.json(
+        { error: prediction.error ?? 'Replicate prediction failed immediately' },
+        { status: 502 }
+      )
     }
 
     predictionId = prediction.id
     if (!predictionId) {
+      console.error('[remove-bg] No prediction ID in response:', JSON.stringify(prediction))
       return NextResponse.json({ error: 'No prediction ID returned' }, { status: 502 })
     }
+
+    console.log('[remove-bg] Polling prediction', predictionId)
   } catch (err) {
     console.error('[remove-bg] Network error creating prediction:', err)
     return NextResponse.json({ error: 'Failed to reach Replicate' }, { status: 502 })
@@ -124,15 +141,21 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await poll.json()
+    console.log('[remove-bg] Poll status:', result.status, '| id:', result.id)
 
     if (result.status === 'succeeded') {
+      console.log('[remove-bg] Succeeded, output:', result.output)
       return streamReplicateImage(result.output, REPLICATE_API_TOKEN)
     }
 
     if (result.status === 'failed' || result.status === 'canceled') {
-      console.error('[remove-bg] Prediction failed:', result.error)
+      console.error('[remove-bg] Prediction failed/canceled:', JSON.stringify({
+        status: result.status,
+        error:  result.error,
+        logs:   result.logs,
+      }))
       return NextResponse.json(
-        { error: result.error ?? 'Replicate prediction failed' },
+        { error: result.error ?? 'Replicate prediction failed', logs: result.logs },
         { status: 502 }
       )
     }
@@ -140,7 +163,8 @@ export async function POST(req: NextRequest) {
     // 'starting' | 'processing' — keep polling
   }
 
-  return NextResponse.json({ error: 'Replicate timed out after 3 minutes' }, { status: 504 })
+  console.error('[remove-bg] Timed out after', POLL_TIMEOUT_MS / 1000, 's')
+  return NextResponse.json({ error: 'Replicate timed out after 4 minutes' }, { status: 504 })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
