@@ -270,8 +270,15 @@ export async function defringeWithMask(
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
+//
+// guideBlob — optional saturation-enhanced version of the original image.
+// When supplied, its pixel data is used as the guided-filter guide instead of
+// the original.  In low-contrast scenes (white subject on white background)
+// the enhanced image has stronger colour edges so the filter snaps alpha to the
+// real boundary rather than smoothing across it.  Decontamination always uses
+// the original colours so the output is colour-correct.
 
-export async function defringe(blob: Blob, originalFile?: File): Promise<Blob> {
+export async function defringe(blob: Blob, originalFile?: File, guideBlob?: Blob): Promise<Blob> {
   const bmp            = await createImageBitmap(blob)
   const { width: w, height: h } = bmp
   const n              = w * h
@@ -295,10 +302,22 @@ export async function defringe(blob: Blob, originalFile?: File): Promise<Blob> {
     const origId  = origCtx.getImageData(0, 0, w, h)
     const origPx  = origId.data
 
-    // ── Luminance guide for guided filter ─────────────────────────────────────
+    // ── Build guided-filter guide from enhanced image when available ──────────
+    // guideBlob has saturation boosted 3× — this gives the filter a real colour
+    // edge in white-on-white scenes where luminance alone is nearly flat.
+    let guidePx = origPx
+    if (guideBlob) {
+      const guideBmp = await createImageBitmap(guideBlob)
+      const guideC   = new OffscreenCanvas(w, h)
+      const guideCtx = guideC.getContext('2d')!
+      guideCtx.drawImage(guideBmp, 0, 0, w, h)
+      guidePx = guideCtx.getImageData(0, 0, w, h).data
+    }
+
+    // ── Luminance guide built from (possibly enhanced) pixels ─────────────────
     const lum = new Float32Array(n)
     for (let i = 0; i < n; i++) {
-      lum[i] = (0.2126 * origPx[i*4] + 0.7152 * origPx[i*4+1] + 0.0722 * origPx[i*4+2]) / 255.0
+      lum[i] = (0.2126 * guidePx[i*4] + 0.7152 * guidePx[i*4+1] + 0.0722 * guidePx[i*4+2]) / 255.0
     }
 
     // ── Guided filter — radius ~0.8% of short side, ε=1e-3 ───────────────────
@@ -311,7 +330,7 @@ export async function defringe(blob: Blob, originalFile?: File): Promise<Blob> {
     // ── Apply refined alpha (rescales premultiplied RGB accordingly) ──────────
     applyRefinedAlpha(d, refined, n)
 
-    // ── Background map + decontamination ─────────────────────────────────────
+    // ── Background map + decontamination (always from original colours) ───────
     const bg = buildBgMap(origPx, roughAlpha, w, h)
     decontaminate(d, bg, n)
 

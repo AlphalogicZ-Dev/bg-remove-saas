@@ -277,20 +277,37 @@ export default function MaskEditor({ originalFile, processedBlob, onApply, onClo
   }
 
   // ── Apply ─────────────────────────────────────────────────────────────────
-  const handleApply = useCallback(async () => {
+  const buildResult = useCallback(async (): Promise<{ blob: Blob; url: string } | null> => {
     const img = imgRef.current
-    if (!img || applying) return
+    if (!img || applying) return null
     setApplying(true)
     try {
       const blob = await defringeWithMask(img.mask, img.w, img.h, originalFile)
       const url  = URL.createObjectURL(blob)
-      onApply(blob, url)
+      return { blob, url }
     } catch (err) {
       console.error('[Apply]', err)
+      return null
     } finally {
       setApplying(false)
     }
-  }, [applying, originalFile, onApply])
+  }, [applying, originalFile])
+
+  const handleApply = useCallback(async () => {
+    const result = await buildResult()
+    if (result) onApply(result.blob, result.url)
+  }, [buildResult, onApply])
+
+  const handleApplyAndDownload = useCallback(async () => {
+    const result = await buildResult()
+    if (!result) return
+    onApply(result.blob, result.url)
+    const a = document.createElement('a')
+    a.href = result.url
+    const base = originalFile.name.replace(/\.[^.]+$/, '')
+    a.download = `${base}-edited.png`
+    a.click()
+  }, [buildResult, onApply, originalFile.name])
 
   // ── Fill all / Clear all helpers ────────────────────────────────────────────
   const fillAll = () => {
@@ -331,9 +348,19 @@ export default function MaskEditor({ originalFile, processedBlob, onApply, onClo
             <button
               onClick={handleApply}
               disabled={applying || busy}
-              className="text-xs bg-[#ff0f50] hover:bg-[#e0003d] disabled:opacity-50 text-white px-4 py-1.5 rounded-lg font-semibold transition-colors shadow-sm"
+              className="text-xs border border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 disabled:opacity-50 px-3 py-1.5 rounded-lg font-medium transition-colors"
             >
-              {applying ? 'Applying…' : 'Apply'}
+              {applying ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              onClick={handleApplyAndDownload}
+              disabled={applying || busy}
+              className="text-xs bg-[#ff0f50] hover:bg-[#e0003d] disabled:opacity-50 text-white px-4 py-1.5 rounded-lg font-semibold transition-colors shadow-sm flex items-center gap-1.5"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {applying ? 'Saving…' : 'Save & Download'}
             </button>
           </div>
         </div>
@@ -415,6 +442,33 @@ export default function MaskEditor({ originalFile, processedBlob, onApply, onClo
               </button>
               <button onClick={clearAll} className="text-[11px] text-gray-500 hover:text-gray-800 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                 Clear all
+              </button>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-col gap-2 pt-3 border-t border-gray-200">
+              <button
+                onClick={handleApplyAndDownload}
+                disabled={applying || busy}
+                className="flex items-center justify-center gap-1.5 text-xs bg-[#ff0f50] hover:bg-[#e0003d] disabled:opacity-50 text-white px-3 py-2 rounded-lg font-semibold transition-colors shadow-sm w-full"
+              >
+                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {applying ? 'Saving…' : 'Save & Download'}
+              </button>
+              <button
+                onClick={handleApply}
+                disabled={applying || busy}
+                className="text-xs border border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 disabled:opacity-50 px-3 py-2 rounded-lg font-medium transition-colors w-full"
+              >
+                {applying ? 'Saving…' : 'Save & Close'}
+              </button>
+              <button
+                onClick={onClose}
+                className="text-xs text-gray-400 hover:text-gray-600 py-1.5 rounded-lg transition-colors w-full"
+              >
+                Cancel
               </button>
             </div>
           </div>
