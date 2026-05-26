@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const maxDuration = 300
 
 const HF_API_TOKEN = process.env.HF_API_TOKEN
-const HF_MODEL_URL = 'https://api-inference.huggingface.co/models/ZhengPeng7/BiRefNet'
+const HF_MODEL_URL = 'https://api-inference.huggingface.co/models/briaai/RMBG-2.0'
 const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
 
 export async function POST(req: NextRequest) {
