@@ -3,9 +3,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 
 /*
- * The "after" image is produced by calling our /api/remove-bg route (BiRefNet
- * via Replicate) on the exact same "before" image URL — no different photos,
- * no CSS tricks. Results are cached in a module-level Map per image URL.
+ * The "after" image is produced by running @imgly/background-removal WASM
+ * on the exact same "before" image URL — no different photos, no CSS tricks.
+ * Results are cached in a module-level Map so the model only runs once per image.
  */
 
 const SAMPLES = [
@@ -65,14 +65,14 @@ async function getProcessed(src: string, onProgress?: (pct: number) => void): Pr
   const res = await fetch(src)
   const blob = await res.blob()
 
-  // Use the same BiRefNet API route as the main processing queue
-  onProgress?.(10)
-  const fd = new FormData()
-  fd.append('image', blob, 'demo.jpg')
-  const apiRes = await fetch('/api/remove-bg', { method: 'POST', body: fd })
-  if (!apiRes.ok) throw new Error(`remove-bg API error: ${apiRes.status}`)
-  const resultBlob = await apiRes.blob()
-  onProgress?.(100)
+  const { removeBackground } = await import('@imgly/background-removal')
+  const resultBlob = await removeBackground(blob, {
+    model: 'medium',
+    output: { format: 'image/png', quality: 1.0 },
+    progress: (_key: string, current: number, total: number) => {
+      if (total > 0) onProgress?.(Math.round((current / total) * 100))
+    },
+  })
 
   const url = URL.createObjectURL(resultBlob)
   resultCache.set(src, url)
