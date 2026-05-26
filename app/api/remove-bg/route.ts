@@ -20,13 +20,39 @@ const POLL_TIMEOUT_MS  = 240_000
 const MAX_FILE_BYTES   = 10 * 1024 * 1024   // 10 MB safety cap
 
 export async function POST(req: NextRequest) {
+  // ── 0. Env var diagnostics — logged on every request ────────────────────
+  console.log('[remove-bg] ENV CHECK', {
+    REPLICATE_API_TOKEN_exists:    !!process.env.REPLICATE_API_TOKEN,
+    REPLICATE_API_TOKEN_length:    process.env.REPLICATE_API_TOKEN?.length ?? 0,
+    REPLICATE_BIREFNET_VERSION:    process.env.REPLICATE_BIREFNET_VERSION ?? '(not set)',
+    NODE_ENV:                      process.env.NODE_ENV,
+  })
+
+  try {
+    return await handler(req)
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err))
+    console.error('[remove-bg] UNHANDLED ERROR', {
+      message: error.message,
+      stack:   error.stack,
+    })
+    return NextResponse.json(
+      { error: 'Internal server error', detail: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+async function handler(req: NextRequest): Promise<NextResponse> {
   if (!REPLICATE_API_TOKEN) {
+    console.error('[remove-bg] REPLICATE_API_TOKEN is missing')
     return NextResponse.json(
       { error: 'REPLICATE_API_TOKEN is not set' },
       { status: 500 }
     )
   }
   if (!REPLICATE_VERSION) {
+    console.error('[remove-bg] REPLICATE_BIREFNET_VERSION is missing')
     return NextResponse.json(
       { error: 'REPLICATE_BIREFNET_VERSION is not set — see route.ts comments' },
       { status: 500 }
