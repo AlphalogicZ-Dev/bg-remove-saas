@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import Dropzone from './Dropzone'
 import ImageCard from './ImageCard'
 import BulkDownload from './BulkDownload'
@@ -20,6 +20,7 @@ export type ImageJob = {
 export default function ProcessingQueue() {
   const [jobs, setJobs] = useState<ImageJob[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const gridRef = useRef<HTMLDivElement>(null)
 
   const updateJob = useCallback((id: string, patch: Partial<ImageJob>) => {
     setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)))
@@ -37,12 +38,35 @@ export default function ProcessingQueue() {
     }))
     setJobs((prev) => [...prev, ...newJobs])
     setIsProcessing(true)
+
+    // Scroll to the image grid after it renders
+    setTimeout(() => {
+      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+
     for (const job of newJobs) {
       updateJob(job.id, { status: 'processing', progress: 0 })
+
+      // Smooth fake ticker: advances ~1% every 300ms, caps at 92 so real progress can overtake
+      let fakeProgress = 0
+      const ticker = setInterval(() => {
+        fakeProgress = Math.min(fakeProgress + 1, 92)
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === job.id && j.status === 'processing'
+              ? { ...j, progress: Math.max(j.progress, fakeProgress) }
+              : j
+          )
+        )
+      }, 300)
+
       try {
         const blob = await removeBackground(job.file, (_stage, current, total) => {
-          updateJob(job.id, { progress: total > 0 ? Math.round((current / total) * 100) : 0 })
+          const real = total > 0 ? Math.round((current / total) * 100) : 0
+          fakeProgress = Math.max(fakeProgress, real) // keep fake in sync so it never regresses
+          updateJob(job.id, { progress: real })
         })
+        clearInterval(ticker)
         updateJob(job.id, {
           status: 'done',
           processedBlob: blob,
@@ -50,6 +74,7 @@ export default function ProcessingQueue() {
           progress: 100,
         })
       } catch (err) {
+        clearInterval(ticker)
         console.error(err)
         updateJob(job.id, { status: 'error', error: 'Processing failed. Please try again.' })
       }
@@ -137,7 +162,7 @@ export default function ProcessingQueue() {
           </div>
 
           {/* Image grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div ref={gridRef} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {jobs.map((job) => (
               <ImageCard key={job.id} job={job} onRemove={removeJob} onMaskUpdate={updateMask} />
             ))}
