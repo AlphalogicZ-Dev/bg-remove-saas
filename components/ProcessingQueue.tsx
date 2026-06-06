@@ -47,20 +47,22 @@ export default function ProcessingQueue() {
     for (const job of newJobs) {
       updateJob(job.id, { status: 'processing', progress: 0 })
 
-      // Simple steady ticker: +1% every 250ms, capped at 99.
-      // Real library callbacks are intentionally ignored for display — they jump in
-      // large chunks and cause the visible "stuck then jump" effect.
+      // Variable-interval ticker: starts at 300ms/tick, slows by +10ms each step.
+      // By the time it reaches 99% (~70s total) real processing is always done,
+      // so the bar is always moving and never waits at any number.
       let displayProgress = 0
-      const ticker = setInterval(() => {
-        if (displayProgress < 99) {
-          displayProgress += 1
-          updateJob(job.id, { progress: displayProgress })
-        }
-      }, 250)
+      let stopped = false
+      const tick = () => {
+        if (stopped || displayProgress >= 99) return
+        displayProgress++
+        updateJob(job.id, { progress: displayProgress })
+        setTimeout(tick, 300 + displayProgress * 10)
+      }
+      setTimeout(tick, 300)
 
       try {
-        const blob = await removeBackground(job.file, () => { /* progress handled by ticker */ })
-
+        const blob = await removeBackground(job.file, () => { /* display handled by ticker */ })
+        stopped = true
         updateJob(job.id, {
           status: 'done',
           processedBlob: blob,
@@ -68,7 +70,7 @@ export default function ProcessingQueue() {
           progress: 100,
         })
       } catch (err) {
-        clearInterval(ticker)
+        stopped = true
         console.error(err)
         updateJob(job.id, { status: 'error', error: 'Processing failed. Please try again.' })
       }
