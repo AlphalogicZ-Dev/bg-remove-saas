@@ -47,18 +47,19 @@ export default function ProcessingQueue() {
     for (const job of newJobs) {
       updateJob(job.id, { status: 'processing', progress: 0 })
 
-      // Fake ticker: 1% every 400ms, capped at 75 so there's always room for the finish animation
+      // Asymptotic ticker: always moves toward 95, decelerates naturally, never flat-lines
       let fakeProgress = 0
       const ticker = setInterval(() => {
-        fakeProgress = Math.min(fakeProgress + 1, 75)
+        fakeProgress += (95 - fakeProgress) * 0.04
+        const display = Math.round(fakeProgress)
         setJobs((prev) =>
           prev.map((j) =>
             j.id === job.id && j.status === 'processing'
-              ? { ...j, progress: Math.max(j.progress, fakeProgress) }
+              ? { ...j, progress: Math.max(j.progress, display) }
               : j
           )
         )
-      }, 400)
+      }, 200)
 
       try {
         const blob = await removeBackground(job.file, (_stage, current, total) => {

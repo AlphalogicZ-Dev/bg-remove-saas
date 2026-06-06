@@ -104,7 +104,7 @@ export async function removeBackground(
   }
 
   const makeOpts = (lo: number, hi: number) => ({
-    model: 'medium' as const,
+    model: 'small' as const,
     output: { format: 'image/png' as const, quality: 1 },
     progress: (key: string, cur: number, tot: number) => {
       if (tot > 0) onProgress?.(key, lo + Math.round((cur / tot) * (hi - lo)), 100)
