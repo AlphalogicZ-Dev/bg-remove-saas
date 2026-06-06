@@ -39,18 +39,18 @@ export default function ProcessingQueue() {
     setJobs((prev) => [...prev, ...newJobs])
     setIsProcessing(true)
 
-    // Scroll to the image grid after it renders
+    // Scroll just enough to reveal the grid — 'nearest' won't over-scroll
     setTimeout(() => {
-      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }, 100)
 
     for (const job of newJobs) {
       updateJob(job.id, { status: 'processing', progress: 0 })
 
-      // Smooth fake ticker: advances ~1% every 300ms, caps at 92 so real progress can overtake
+      // Fake ticker: 1% every 400ms, capped at 75 so there's always room for the finish animation
       let fakeProgress = 0
       const ticker = setInterval(() => {
-        fakeProgress = Math.min(fakeProgress + 1, 92)
+        fakeProgress = Math.min(fakeProgress + 1, 75)
         setJobs((prev) =>
           prev.map((j) =>
             j.id === job.id && j.status === 'processing'
@@ -58,15 +58,29 @@ export default function ProcessingQueue() {
               : j
           )
         )
-      }, 300)
+      }, 400)
 
       try {
         const blob = await removeBackground(job.file, (_stage, current, total) => {
           const real = total > 0 ? Math.round((current / total) * 100) : 0
-          fakeProgress = Math.max(fakeProgress, real) // keep fake in sync so it never regresses
+          fakeProgress = Math.max(fakeProgress, real)
           updateJob(job.id, { progress: real })
         })
         clearInterval(ticker)
+
+        // Animate smoothly from wherever we are → 100 (no jump, no stuck)
+        await new Promise<void>((resolve) => {
+          const finish = setInterval(() => {
+            setJobs((prev) => {
+              const current = prev.find((j) => j.id === job.id)?.progress ?? 100
+              if (current >= 100) { clearInterval(finish); resolve(); return prev }
+              return prev.map((j) =>
+                j.id === job.id ? { ...j, progress: Math.min(current + 2, 100) } : j
+              )
+            })
+          }, 30)
+        })
+
         updateJob(job.id, {
           status: 'done',
           processedBlob: blob,
