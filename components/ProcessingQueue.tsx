@@ -47,10 +47,17 @@ export default function ProcessingQueue() {
     for (const job of newJobs) {
       updateJob(job.id, { status: 'processing', progress: 0 })
 
-      // Asymptotic ticker: always moves toward 95, decelerates naturally, never flat-lines
+      // Estimate total processing time from file size (empirically tuned for small model 3-pass)
+      // Base 6s + ~5s per MB — gives a linear target duration that scales with image size
+      const estimatedMs = 6000 + (job.file.size / (1024 * 1024)) * 5000
+      const tickMs = 100
       let fakeProgress = 0
+      const startTime = Date.now()
+
       const ticker = setInterval(() => {
-        fakeProgress += (95 - fakeProgress) * 0.04
+        const elapsed = Date.now() - startTime
+        // Pure linear based on elapsed time — consistent rate regardless of where we are
+        fakeProgress = Math.min((elapsed / estimatedMs) * 92, 92)
         const display = Math.round(fakeProgress)
         setJobs((prev) =>
           prev.map((j) =>
@@ -59,24 +66,24 @@ export default function ProcessingQueue() {
               : j
           )
         )
-      }, 200)
+      }, tickMs)
 
       try {
         const blob = await removeBackground(job.file, (_stage, current, total) => {
           const real = total > 0 ? Math.round((current / total) * 100) : 0
           fakeProgress = Math.max(fakeProgress, real)
-          updateJob(job.id, { progress: real })
+          updateJob(job.id, { progress: Math.max(Math.round(fakeProgress), real) })
         })
         clearInterval(ticker)
 
-        // Animate smoothly from wherever we are → 100 (no jump, no stuck)
+        // Animate remaining gap → 100 at consistent 2%/30ms (never a jump)
         await new Promise<void>((resolve) => {
           const finish = setInterval(() => {
             setJobs((prev) => {
-              const current = prev.find((j) => j.id === job.id)?.progress ?? 100
-              if (current >= 100) { clearInterval(finish); resolve(); return prev }
+              const cur = prev.find((j) => j.id === job.id)?.progress ?? 100
+              if (cur >= 100) { clearInterval(finish); resolve(); return prev }
               return prev.map((j) =>
-                j.id === job.id ? { ...j, progress: Math.min(current + 2, 100) } : j
+                j.id === job.id ? { ...j, progress: Math.min(cur + 2, 100) } : j
               )
             })
           }, 30)
